@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"></meta>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>React Tutorial Rewritten in OM</title>
+  </head>
+  <style>
+      div.r {
+        display:inline-block;
+        color:white;
+        border:1px grey solid;
+        width: 30px;
+        height: 30px;
+        text-align: center;
+      }
+      div.c1 {
+        display:block;
+        width: 0px;
+        height: 0px;
+        border: 0px;
+      }
+      div.discovered {
+        background-color: red;
+      }
+      div.found {
+        background-color: green;
+      }
+      div.clicked {
+        color: black;
+      }
+  </style>
+  <body>
+    <!-- entry point for components -->
+    <div id="content"></div>
+
+    <script src="react-0.5.1.js"></script>
+    <script src="js/out/goog/base.js" type="text/javascript"></script>
+    <script src="js/app.js" type="text/javascript"></script>
+    <script type="text/javascript">goog.require("memory.app");</script>
+  </body>
+</html>
