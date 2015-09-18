@@ -18,12 +18,14 @@
 
 (def INITIAL [])
 
-(def width 5)
-(def height 5)
+(def width 6)
+(def height 6)
 (def n-pieces (/ (* width height) 2))
 
 
-(def indices  (for [r (range 0 width) p (range 0 height)] [r p]))
+
+(def indices  (for [r (range 0 width) 
+                    p (range 0 height)] [r p]))
 
 (defn generate-board []
   (let [ get-by-index (fn [v [x y]] (get v (+ x (* y width))))
@@ -35,45 +37,38 @@
 
 (def app-state (atom {}))
 
-(defn sort-row [row]
-  (sort (fn [[[_ y] _] [[_ y2] _]] (< y y2)) row))
-
-(defn get-row [board nth]
-  (sort-row (filter (fn [[[x _] _]] (= x nth)) board)))
-
-(defn conj-discovered [cursor & args]
-  (update-in cursor [:discovered] #(conj % args)))
-
 (defn handle-click [e cursor cur-index]
-  (let [ch (chan)]
+  (let [pauseCh (chan)]
     (om/update! cursor
                 (fn [{:keys [board clicked paused] :as cursor}]
                   (if paused
                     cursor
                     (let [cur-piece (get board cur-index)
-                          last-piece (:piece clicked)
-                          last-index (:index clicked)
-                          first-click? (nil? clicked)
-                          new-found? (and (= last-piece cur-piece)
-                                          (not (= last-index cur-index)))]
+                          prev-piece (:piece clicked)
+                          prev-index (:index clicked)
+                          first-discovered? (nil? clicked)
+                          new-pair-found? (and (= prev-piece cur-piece)
+                                               (not (= prev-index cur-index)))]
                       (cond
-                        first-click? (-> cursor
-                                         (assoc :clicked {:piece cur-piece :index cur-index})
-                                         (update-in [:discovered] #(conj % cur-index)))
-                        new-found? (do
-                                     (.log js/console "new found!")
-                                     (-> cursor
-                                         (dissoc :clicked)
-                                         (update-in [:found] #(conj % cur-index last-index))
-                                         (update-in [:discovered] #(conj % cur-index last-index))))
+                        first-discovered? (-> cursor
+                                            (assoc :clicked {:piece cur-piece :index cur-index})
+                                            (update-in [:discovered] #(conj % cur-index)))
+                        new-pair-found? (do
+                                          (.log js/console "new found!")
+                                          (.log js/console (toString (:discovered cursor)))
+                                          (-> cursor
+                                            (dissoc :clicked)
+                                            (update-in [:found] #(conj % cur-index prev-index))
+                                            (update-in [:discovered] #(conj % cur-index prev-index))
+                                            (update-in [:n-left-to-discover] dec)))
                         :else (do
                                 (.log js/console "fail" (:discovered cursor))
-                                (go (>! ch [cur-index (:index clicked)]))
+                                (go (>! pauseCh [cur-index (:index clicked)]))
                                 (-> cursor
                                     (dissoc :clicked)
                                     (assoc :paused true)
-                                    (update-in [:discovered] #(conj % cur-index last-index)))))))))
-    (go (let [[a b] (<! ch)]
+                                    (update-in [:discovered] #(conj % cur-index prev-index)))))))))
+    (go (let [[a b] (<! pauseCh)]
           (<! (timeout 1000))
           (om/update! cursor
                       (fn [c]
@@ -87,30 +82,39 @@
   (reify
     om/IInitState
     (init-state [this]
-      (om/update! cursor #(assoc % :board (generate-board) :clicked nil :found #{} :discovered #{} )))
+      (om/update! cursor #(assoc % :board (generate-board) 
+                                   :clicked nil 
+                                   :found #{} 
+                                   :discovered #{} 
+                                   :n-left-to-discover (/ (* width height) 2)
+                                   )))
     om/IRender
     (render [this]
-      (let [{:keys [board found clicked discovered]} cursor]
-        (apply dom/div #js {:className "o"}
-
-               (for [y (range 0 height)
-                     x (range -1 width)]
-                 (let [v (get board [x y])
-                       clicked? (= (:index clicked) [x y])
-                       found? (contains? found [x y])
-                       discovered? (contains? discovered [x y])
-                       className (str
-                                   (when clicked? " clicked")
-                                   (when found? " found")
-                                   (when discovered? " discovered")
-                                   " r")
-                       clickable? (and (not clicked?)
-                                       (not found?))]
-                       (if (== -1 x)
-                         (dom/div #js {:className (str "c1 r")} "")
-                         (dom/div #js {:className className :onClick (when clickable? #(handle-click % cursor [x y]))}
-                                  (str "(" v ")"))))))))))
-
+      (let [{:keys [board found clicked discovered n-left-to-discover]} cursor
+          board (for [y (range 0 height)
+                      x (range -1 width)]
+                  (let [v (get board [x y])
+                        clicked? (= (:index clicked) [x y])
+                        found? (contains? found [x y])
+                        discovered? (contains? discovered [x y])
+                        className (str
+                                    (when clicked? " clicked")
+                                    (when found? " found")
+                                    (when discovered? " discovered")
+                                    " r")
+                        clickable? (and (not clicked?)
+                                        (not found?))]
+                        (if (== -1 x)
+                          (dom/div #js {:className (str "c1 r")} "")
+                          (dom/div #js {:className className :onClick (when clickable? #(handle-click % cursor [x y]))}
+                            (str "(" v ")")))))
+          left-to-discover (dom/div #js {:className "n-left-to-discover"} (str "Left to discover " n-left-to-discover))
+          victory (dom/div nil (if (= n-left-to-discover 0) "Victory!" "")) ]
+        (dom/div nil
+          (apply dom/div #js {:className "o"}    
+            board)
+          left-to-discover
+          victory)))))
 
 (defn tutorial-app [cursor owner]
   (.log js/console "owner" owner)
